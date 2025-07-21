@@ -14,10 +14,34 @@ from models.comprehensive_model import ComprehensiveModel
 from utils.metrics import calculate_metrics
 from utils.checkpoint import load_checkpoint
 
-def get_freq_domain_input(spatial_imgs):
+#def get_freq_domain_input(spatial_imgs):
     """一个辅助函数，用于从空间域图像批量生成频域输入"""
     # 在评估时，也需要与训练时一致的频域处理
-    return torch.randn_like(spatial_imgs)[:, :1, :, :] # 示例
+   # return torch.randn_like(spatial_imgs)[:, :1, :, :] # 示例
+def get_freq_domain_input(spatial_imgs):
+    """将空间域图像转换为频域表示
+    
+    使用离散傅里叶变换(DFT)将RGB图像转换为频谱图
+    Args:
+        spatial_imgs: shape (B, C, H, W) 的图像张量
+    Returns:
+        freq_imgs: shape (B, 1, H, W) 的频谱图张量
+    """
+    # 转换为灰度图
+    rgb_weights = torch.tensor([0.299, 0.587, 0.114]).view(1, 3, 1, 1).to(spatial_imgs.device)
+    gray_imgs = (spatial_imgs * rgb_weights).sum(dim=1, keepdim=True)
+    
+    # 执行2D FFT
+    fft_imgs = torch.fft.fft2(gray_imgs, dim=(-2, -1))
+    # 将零频率分量移到中心
+    fft_shift = torch.fft.fftshift(fft_imgs, dim=(-2, -1))
+    # 计算幅度谱（取对数以增强视觉效果）
+    freq_imgs = torch.log(torch.abs(fft_shift) + 1)
+    
+    # 归一化到[0,1]区间
+    freq_imgs = (freq_imgs - freq_imgs.min()) / (freq_imgs.max() - freq_imgs.min() + 1e-8)
+    return freq_imgs
+#这里直接将训练的那个函数搬了过来 我也不清楚有没有用
 
 def evaluate(config):
     """主评估函数
